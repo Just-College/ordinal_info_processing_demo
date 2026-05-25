@@ -1,0 +1,5 @@
+# training and analyzing outputs
+outputs/
+
+# python cache
+**/__pycache__/
