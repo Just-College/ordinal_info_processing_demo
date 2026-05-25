@@ -4,11 +4,9 @@ from pathlib import Path
 import matplotlib.pyplot as plt
 
 REPO_ROOT = Path(__file__).parent.parent
-CSV_DIR = REPO_ROOT / "csv"
-RESOURCE_HISTORY = REPO_ROOT / "resources" / "figure3b_transfer_history_seed1107.csv"
 FIGURE_DIR = REPO_ROOT / "figure"
 
-CSV_FILE = None  # None 表示自动使用最新 sec3_transfer_compare_seed*.csv
+CSV_FILE = REPO_ROOT / "resources" / "figure3b_transfer_history_seed1107.csv"
 OUTPUT_FILE = FIGURE_DIR / "figure3B_transfer_test_accuracy.png"
 ENABLE_PLOT_SHOW = False
 
@@ -20,20 +18,8 @@ MODE_LABELS = {
 MODE_COLORS = {"scratch_all": "#1f77b4", "sec2_pretrained_freeze_wrec": "#ff7f0e"}
 
 
-def find_latest_history():
-    candidates = sorted(CSV_DIR.glob("sec3_transfer_compare_seed*.csv"))
-    if candidates:
-        return candidates[-1]
-    if RESOURCE_HISTORY.exists():
-        return RESOURCE_HISTORY
-    raise FileNotFoundError(
-        f"No sec3 transfer history found under {CSV_DIR} or {RESOURCE_HISTORY}. "
-        "Run src/train_sec3_transfer.py first."
-    )
-
-
 def load_history():
-    csv_path = Path(CSV_FILE) if CSV_FILE else find_latest_history()
+    csv_path = Path(CSV_FILE)
     if not csv_path.is_absolute():
         csv_path = REPO_ROOT / csv_path
     if not csv_path.exists():
