@@ -21,14 +21,12 @@ class CustomContinuousRNN(nn.Module):
         self.I_b = nn.Parameter(torch.zeros(hidden_dim))
         self.W_out = nn.Linear(hidden_dim, output_dim)
 
-    def forward(self, input_seq, return_states=False):
+    def forward(self, input_seq):
         B, T, _ = input_seq.shape
         device = input_seq.device
         x = torch.zeros(B, self.hidden_dim, device=device)
         r = torch.tanh(x)
         outputs = []
-        rates = []
-        states = []
         for t in range(T):
             I_t = input_seq[:, t, :]
             dx = (
@@ -38,10 +36,4 @@ class CustomContinuousRNN(nn.Module):
             r = torch.tanh(x)
             y_t = self.W_out(r)
             outputs.append(y_t.unsqueeze(1))
-            rates.append(r.unsqueeze(1))
-            states.append(x.unsqueeze(1))
-
-        outputs = torch.cat(outputs, dim=1)
-        if not return_states:
-            return outputs
-        return outputs, torch.cat(rates, dim=1), torch.cat(states, dim=1)
+        return torch.cat(outputs, dim=1)

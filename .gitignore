@@ -1,5 +1,6 @@
-# training and analyzing outputs
-outputs/
+.vscode/
 
-# python cache
 **/__pycache__/
+
+model/
+figure/
