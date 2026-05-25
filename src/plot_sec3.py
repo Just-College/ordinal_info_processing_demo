@@ -8,7 +8,7 @@ FIGURE_DIR = REPO_ROOT / "figure"
 
 CSV_FILE = REPO_ROOT / "resources" / "figure3b_transfer_history_seed1107.csv"
 OUTPUT_FILE = FIGURE_DIR / "figure3B_transfer_test_accuracy.png"
-ENABLE_PLOT_SHOW = False
+ENABLE_PLOT_SHOW = True
 
 MODE_LABELS = {
     "scratch_all": "w/o transfer",

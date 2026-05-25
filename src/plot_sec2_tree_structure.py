@@ -26,7 +26,7 @@ SAMPLE_PER_CLASS = 256
 N_SAMPLES_PER_CLASS = 25
 NOISE_STD = 0.0
 NODE_WINDOW = 5
-ENABLE_PLOT_SHOW = False
+ENABLE_PLOT_SHOW = True
 
 OPT_STEPS = 2000
 LBFGS_STEPS = 200
@@ -413,7 +413,7 @@ def plot_tree_with_fixed_points(rates_by_class, fixed_rows, fixed_states):
     ax.set_zlabel("PC3")
     ax.set_title("Sec.2 trajectories with stable fixed points")
     ax.view_init(elev=24, azim=-56)
-    ax.grid(True, alpha=0.25)
+    ax.grid(False)
     ax.legend(loc="best", fontsize=8)
     plt.tight_layout()
     save_and_maybe_show(OUT_FIG, dpi=300, show=ENABLE_PLOT_SHOW)
