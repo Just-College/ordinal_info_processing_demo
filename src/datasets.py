@@ -74,11 +74,7 @@ class SequenceDataset(Dataset):
         x = self.samples[idx]
         class_id, lengths, t_noise = self.labels[idx]
         y = generate_ramping_target(
-            lengths,
-            class_id,
-            len(self.sequences),
-            t_noise,
-            self.t_max,
+            lengths, class_id, len(self.sequences), t_noise, self.t_max
         )
         return x, y, class_id, t_noise
 

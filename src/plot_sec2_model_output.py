@@ -9,7 +9,6 @@ import torch
 from datasets import SyntheticSequenceDataset
 from models import SimpleRNN
 
-
 REPO_ROOT = Path(__file__).parent.parent
 MODEL_DIR = REPO_ROOT / "model"
 FIG_DIR = REPO_ROOT / "figure"
@@ -175,9 +174,7 @@ def plot_output_curve(outputs, targets, class_id, show=False):
 
     plt.xlabel("Timestep")
     plt.ylabel("Outputs")
-    plt.title(
-        f"Model output for class {class_id} ({SEQUENCE_NAMES[class_id]})"
-    )
+    plt.title(f"Model output for class {class_id} ({SEQUENCE_NAMES[class_id]})")
     plt.legend(ncol=2, fontsize=8)
     plt.tight_layout()
     out_path = FIG_DIR / f"sec2_model_output_class{class_id}.png"
