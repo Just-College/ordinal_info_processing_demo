@@ -1,78 +1,88 @@
-import os
 from pathlib import Path
 
 import matplotlib.pyplot as plt
 import pandas as pd
 
-CSV_DIR = f"{Path(__file__).parent.parent}/csv/"
-PARTIAL = True  # 是否为部分利用模型
-SMOOTH = True  # 是否开启滑动平均
-SMOOTH_WINDOW = 5  # 平滑窗口大小
+REPO_ROOT = Path(__file__).parent.parent
+CSV_DIR = REPO_ROOT / "csv"
+RESOURCE_HISTORY = REPO_ROOT / "resources" / "figure3b_transfer_history_seed1107.csv"
+FIGURE_DIR = REPO_ROOT / "figure"
 
-if PARTIAL:
-    csv_files = {
-        "pretrained: False, freeze: False": os.path.join(
-            CSV_DIR,
-            "train_history_newtest_rnn_mfcc16_hid50_spc512_pretrainedFalse_freezeFalse_20250715_162724.csv",
-        ),
-        "pretrained: False, freeze: True": os.path.join(
-            CSV_DIR,
-            "train_history_newtest_rnn_mfcc16_hid50_spc512_pretrainedFalse_freezeTrue_20250715_163423.csv",
-        ),
-        "pretrained: True, freeze: True": os.path.join(
-            CSV_DIR,
-            "train_history_newtest_rnn_mfcc16_hid50_spc512_pretrainedTrue_freezeTrue_20250715_161615.csv",
-        ),
-        "pretrained: True, freeze: False": os.path.join(
-            CSV_DIR,
-            "train_history_newtest_rnn_mfcc16_hid50_spc512_pretrainedTrue_freezeFalse_20250716_095537.csv",
-        ),
-    }
-else:
-    csv_files = {
-        "pretrained: False, freeze: False": os.path.join(
-            CSV_DIR, "train_history_pretrainedFalse_freezeFalse_20250714_214052.csv"
-        ),
-        "pretrained: False, freeze: True": os.path.join(
-            CSV_DIR, "train_history_pretrainedFalse_freezeTrue_20250714_213056.csv"
-        ),
-        "pretrained: True, freeze: True": os.path.join(
-            CSV_DIR, "train_history_pretrainedTrue_freezeTrue_20250714_212048.csv"
-        ),
-        "pretrained: True, freeze: False": os.path.join(
-            CSV_DIR, "train_history_pretrainedTrue_freezeFalse_20250716_093811.csv"
-        ),
-    }
+CSV_FILE = None  # None 表示自动使用最新 sec3_transfer_compare_seed*.csv
+OUTPUT_FILE = FIGURE_DIR / "figure3B_transfer_test_accuracy.png"
+ENABLE_PLOT_SHOW = False
 
-plt.figure(figsize=(10, 6))
-for label, file_path in csv_files.items():
-    if not os.path.exists(file_path):
-        print(f"警告：{file_path} 不存在，跳过。")
-        continue
-    df = pd.read_csv(file_path)
-    # 假定csv有 'epoch' 和 'test_acc' 两列
-    if "epoch" not in df.columns or "test_acc" not in df.columns:
-        print(f"警告：{file_path} 缺少必要列，跳过。")
-        continue
-    if SMOOTH:
-        acc_smooth = (
-            df["test_acc"]
-            .rolling(window=SMOOTH_WINDOW, min_periods=1, center=True)
-            .mean()
+MODE_LABELS = {
+    "scratch_all": "w/o transfer",
+    "sec2_pretrained_freeze_wrec": "with transfer",
+}
+
+MODE_COLORS = {"scratch_all": "#1f77b4", "sec2_pretrained_freeze_wrec": "#ff7f0e"}
+
+
+def find_latest_history():
+    candidates = sorted(CSV_DIR.glob("sec3_transfer_compare_seed*.csv"))
+    if candidates:
+        return candidates[-1]
+    if RESOURCE_HISTORY.exists():
+        return RESOURCE_HISTORY
+    raise FileNotFoundError(
+        f"No sec3 transfer history found under {CSV_DIR} or {RESOURCE_HISTORY}. "
+        "Run src/train_sec3_transfer_compare.py first."
+    )
+
+
+def load_history():
+    csv_path = Path(CSV_FILE) if CSV_FILE else find_latest_history()
+    if not csv_path.is_absolute():
+        csv_path = REPO_ROOT / csv_path
+    if not csv_path.exists():
+        raise FileNotFoundError(f"Missing history CSV: {csv_path}")
+
+    df = pd.read_csv(csv_path)
+    required = {"mode", "epoch", "test_acc"}
+    missing = required - set(df.columns)
+    if missing:
+        raise ValueError(f"{csv_path} missing required columns: {sorted(missing)}")
+    return csv_path, df
+
+
+def plot_figure3b():
+    csv_path, df = load_history()
+    FIGURE_DIR.mkdir(parents=True, exist_ok=True)
+
+    plt.figure(figsize=(5.2, 3.6))
+    for mode in MODE_LABELS:
+        mode_df = df[df["mode"] == mode].sort_values("epoch")
+        if mode_df.empty:
+            print(f"Warning: mode {mode!r} not found in {csv_path}")
+            continue
+        y = mode_df["test_acc"]
+        plt.plot(
+            mode_df["epoch"],
+            y,
+            label=MODE_LABELS[mode],
+            color=MODE_COLORS[mode],
+            linewidth=2.2,
         )
-        plt.plot(df["epoch"], acc_smooth, label=label + " (smooth)", linewidth=2)
+
+    ax = plt.gca()
+    ax.spines[["top", "right"]].set_visible(False)
+
+    plt.xlabel("Epoch")
+    plt.ylabel("Test Accuracy (%)")
+    plt.title("Transfer Learning")
+    plt.ylim(0, 105)
+    plt.legend()
+    plt.tight_layout()
+    plt.savefig(OUTPUT_FILE, dpi=300)
+    print(f"Loaded history: {csv_path}")
+    print(f"Saved figure: {OUTPUT_FILE}")
+    if ENABLE_PLOT_SHOW:
+        plt.show()
     else:
-        plt.plot(df["epoch"], df["test_acc"], label=label, linewidth=2)
-plt.xlabel("Epoch")
-plt.ylabel("Test Accuracy (%)")
-plt.title("Test Accuracy Curve for Different Training Modes")
-plt.legend()
-plt.grid(True)
-plt.tight_layout()
+        plt.close()
 
-if PARTIAL:
-    plt.savefig("test_acc_compare_modes_partial.png", dpi=200)
-else:
-    plt.savefig("test_acc_compare_modes_complete.png", dpi=200)
 
-plt.show()
+if __name__ == "__main__":
+    plot_figure3b()

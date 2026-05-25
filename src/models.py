@@ -3,7 +3,7 @@ import torch
 from torch import nn
 
 
-class CustomContinuousRNN(nn.Module):
+class SimpleRNN(nn.Module):
     def __init__(self, input_dim, hidden_dim, output_dim, tau=10.0):
         super().__init__()
         self.input_dim = input_dim

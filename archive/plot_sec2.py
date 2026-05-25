@@ -9,27 +9,28 @@ import numpy as np
 import torch
 from sklearn.decomposition import PCA
 
-from train_sec2 import (
+from train_sec2_synthetic import (
     DEVICE,
     HIDDEN_DIM,
     N_MFCC,
     PHONEME_LEN,
-    TAU,
     T_MAX,
-    CustomContinuousRNN,
+    TAU,
+    SimpleRNN,
     SyntheticSequenceDataset,
 )
 
 MODEL_DIR = f"{Path(__file__).parent.parent}/model/"
 FIG_DIR = f"{Path(__file__).parent.parent}/figure/"
-MODEL_NAME = "rnn_mfcc3_hid64_spc64_sec2_20260525_192547.pt"
+MODEL_NAME = "rnn_mfcc3_hid64_spc128_sec2_seed1107.pt"
 CHECKPOINT = f"{MODEL_DIR}/{MODEL_NAME}"
 
-SAMPLE_PER_CLASS = 200
+SAMPLE_PER_CLASS = 256
 N_SAMPLES_PER_CLASS = 25
-SELECT_CLASS_ID = None  # None means random class.
-NOISE_STD = 0.01
+SELECT_CLASS_ID = 2  # None means random class.
+NOISE_STD = 0.0
 NODE_WINDOW = 5
+ENABLE_PLOT_SHOW = False
 
 SYN_PRIMITIVES = [
     np.array([1, 1, 0], dtype=np.float32),
@@ -46,8 +47,15 @@ SEQUENCES_SYN = [
 ]
 SEQUENCE_NAMES = ["ab", "ac", "ba", "bc"]
 
-
 Path(FIG_DIR).mkdir(exist_ok=True)
+
+
+def save_and_maybe_show(out_path, dpi, show):
+    plt.savefig(out_path, dpi=dpi)
+    if show:
+        plt.show()
+    plt.close()
+
 
 def resolve_checkpoint():
     if os.path.exists(CHECKPOINT):
@@ -106,7 +114,7 @@ def manual_pca(activations, n_components=3):
     return projected, explained_var, eigvals, eigvecs[:, :n_components]
 
 
-def save_pca_variance(activations):
+def save_pca_variance(activations, show=False):
     max_components = min(activations.shape[1], 10)
 
     sklearn_pca = PCA(n_components=max_components)
@@ -128,13 +136,14 @@ def save_pca_variance(activations):
     plt.legend()
     plt.tight_layout()
     out_path = f"{FIG_DIR}/pca_variance_curve.png"
-    plt.savefig(out_path, dpi=200)
-    plt.close()
+    save_and_maybe_show(out_path, dpi=200, show=show)
     print(f"Saved PCA variance curve: {out_path}")
-    print(f"Top 3 cumulative explained variance: {sklearn_cumulative[min(2, max_components - 1)]:.4f}")
+    print(
+        f"Top 3 cumulative explained variance: {sklearn_cumulative[min(2, max_components - 1)]:.4f}"
+    )
 
 
-def save_output_curve(outputs, targets, class_id):
+def save_output_curve(outputs, targets, class_id, show=False):
     mean_outputs = outputs.mean(axis=0)
     std_outputs = outputs.std(axis=0)
     mean_targets = targets.mean(axis=0)
@@ -186,19 +195,19 @@ def save_output_curve(outputs, targets, class_id):
     plt.legend(ncol=2, fontsize=8)
     plt.tight_layout()
     out_path = f"{FIG_DIR}/multi_sample_output_curve_class{class_id}.png"
-    plt.savefig(out_path, dpi=200)
-    plt.close()
+    save_and_maybe_show(out_path, dpi=200, show=show)
     print(f"Saved output curve: {out_path}")
 
 
-def save_3d_trajectories(rates_by_class, pca):
+def save_3d_trajectories(rates_by_class, pca, show=False):
     fig = plt.figure(figsize=(10, 7))
     ax = fig.add_subplot(111, projection="3d")
     colors = ["tab:blue", "tab:orange", "tab:green", "tab:red"]
+    root_start = max(T_MAX - NODE_WINDOW, 0)
 
     for class_id, rates in rates_by_class.items():
         mean_rates = rates.mean(axis=0)
-        traj = pca.transform(mean_rates)
+        traj = pca.transform(mean_rates[root_start:])
         ax.plot(
             traj[:, 0],
             traj[:, 1],
@@ -215,8 +224,7 @@ def save_3d_trajectories(rates_by_class, pca):
     ax.legend(loc="best")
     plt.tight_layout()
     out_path = f"{FIG_DIR}/rnn_activity_pca_3d_traj_per_class.png"
-    plt.savefig(out_path, dpi=200)
-    plt.close()
+    save_and_maybe_show(out_path, dpi=200, show=show)
     print(f"Saved 3D trajectory plot: {out_path}")
 
 
@@ -250,9 +258,9 @@ def tree_node_estimates(rates_by_class):
         axis=0,
     )
     leaves = [
-        rates_by_class[class_id][
-            :, sequence_end - NODE_WINDOW : sequence_end, :
-        ].mean(axis=(0, 1))
+        rates_by_class[class_id][:, sequence_end - NODE_WINDOW : sequence_end, :].mean(
+            axis=(0, 1)
+        )
         for class_id in range(len(SEQUENCES_SYN))
     ]
 
@@ -262,22 +270,18 @@ def tree_node_estimates(rates_by_class):
 
 
 def draw_segment(ax, start, end, **kwargs):
-    ax.plot(
-        [start[0], end[0]],
-        [start[1], end[1]],
-        [start[2], end[2]],
-        **kwargs,
-    )
+    ax.plot([start[0], end[0]], [start[1], end[1]], [start[2], end[2]], **kwargs)
 
 
-def save_figure2e(rates_by_class, pca):
+def save_figure2e(rates_by_class, pca, show=False):
     fig = plt.figure(figsize=(7.4, 6.4))
     ax = fig.add_subplot(111, projection="3d")
     colors = ["#d62728", "#2ca02c", "#ff7f0e", "#1f77b4"]
+    root_start = max(T_MAX - NODE_WINDOW, 0)
 
     for class_id in range(len(SEQUENCES_SYN)):
         mean_rates = rates_by_class[class_id].mean(axis=0)
-        traj = pca.transform(mean_rates)
+        traj = pca.transform(mean_rates[root_start:])
         ax.plot(
             traj[:, 0],
             traj[:, 1],
@@ -287,12 +291,7 @@ def save_figure2e(rates_by_class, pca):
             label=f"$S_{class_id + 1}$ ({SEQUENCE_NAMES[class_id]})",
         )
         ax.scatter(
-            traj[0, 0],
-            traj[0, 1],
-            traj[0, 2],
-            color=colors[class_id],
-            s=18,
-            alpha=0.75,
+            traj[0, 0], traj[0, 1], traj[0, 2], color=colors[class_id], s=18, alpha=0.75
         )
 
     node_names, nodes = tree_node_estimates(rates_by_class)
@@ -332,10 +331,9 @@ def save_figure2e(rates_by_class, pca):
     ax.grid(True, alpha=0.25)
     ax.legend(loc="best", fontsize=8)
     plt.tight_layout()
-
     out_path = f"{FIG_DIR}/figure2E_tree_structure.png"
-    plt.savefig(out_path, dpi=300)
-    plt.close()
+
+    save_and_maybe_show(out_path, dpi=300, show=show)
     print(f"Saved Figure 2E reproduction: {out_path}")
 
 
@@ -351,9 +349,7 @@ def main():
         fixed=True,
     )
 
-    model = CustomContinuousRNN(N_MFCC, HIDDEN_DIM, len(SEQUENCES_SYN), tau=TAU).to(
-        DEVICE
-    )
+    model = SimpleRNN(N_MFCC, HIDDEN_DIM, len(SEQUENCES_SYN), tau=TAU).to(DEVICE)
     checkpoint = resolve_checkpoint()
     model.load_state_dict(load_state_dict(checkpoint))
     model.eval()
@@ -373,7 +369,10 @@ def main():
             rates_by_class[class_id].append(rates.squeeze(0).cpu().numpy())
             targets_by_class[class_id].append(target.cpu().numpy())
 
-            if all(len(values) >= N_SAMPLES_PER_CLASS for values in outputs_by_class.values()):
+            if all(
+                len(values) >= N_SAMPLES_PER_CLASS
+                for values in outputs_by_class.values()
+            ):
                 break
 
     missing = {
@@ -409,18 +408,19 @@ def main():
         outputs_by_class[selected_class_id],
         targets_by_class[selected_class_id],
         selected_class_id,
+        show=ENABLE_PLOT_SHOW,
     )
 
     all_rates = np.concatenate(
         [rates.reshape(-1, rates.shape[-1]) for rates in rates_by_class.values()],
         axis=0,
     )
-    save_pca_variance(all_rates)
+    save_pca_variance(all_rates, show=ENABLE_PLOT_SHOW)
 
     pca = PCA(n_components=3)
     pca.fit(all_rates)
-    save_3d_trajectories(rates_by_class, pca)
-    save_figure2e(rates_by_class, pca)
+    save_3d_trajectories(rates_by_class, pca, show=ENABLE_PLOT_SHOW)
+    save_figure2e(rates_by_class, pca, show=ENABLE_PLOT_SHOW)
 
 
 if __name__ == "__main__":
