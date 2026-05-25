@@ -1,7 +1,7 @@
+import csv
 from pathlib import Path
 
 import matplotlib.pyplot as plt
-import pandas as pd
 
 REPO_ROOT = Path(__file__).parent.parent
 CSV_DIR = REPO_ROOT / "csv"
@@ -28,7 +28,7 @@ def find_latest_history():
         return RESOURCE_HISTORY
     raise FileNotFoundError(
         f"No sec3 transfer history found under {CSV_DIR} or {RESOURCE_HISTORY}. "
-        "Run src/train_sec3_transfer_compare.py first."
+        "Run src/train_sec3_transfer.py first."
     )
 
 
@@ -39,28 +39,33 @@ def load_history():
     if not csv_path.exists():
         raise FileNotFoundError(f"Missing history CSV: {csv_path}")
 
-    df = pd.read_csv(csv_path)
+    with open(csv_path, newline="", encoding="utf-8") as f:
+        reader = csv.DictReader(f)
+        rows = list(reader)
+
     required = {"mode", "epoch", "test_acc"}
-    missing = required - set(df.columns)
+    missing = required - set(reader.fieldnames or [])
     if missing:
         raise ValueError(f"{csv_path} missing required columns: {sorted(missing)}")
-    return csv_path, df
+    return csv_path, rows
 
 
 def plot_figure3b():
-    csv_path, df = load_history()
+    csv_path, rows = load_history()
     FIGURE_DIR.mkdir(parents=True, exist_ok=True)
 
     plt.figure(figsize=(5.2, 3.6))
     for mode in MODE_LABELS:
-        mode_df = df[df["mode"] == mode].sort_values("epoch")
-        if mode_df.empty:
+        mode_rows = sorted(
+            [row for row in rows if row["mode"] == mode],
+            key=lambda row: int(row["epoch"]),
+        )
+        if not mode_rows:
             print(f"Warning: mode {mode!r} not found in {csv_path}")
             continue
-        y = mode_df["test_acc"]
         plt.plot(
-            mode_df["epoch"],
-            y,
+            [int(row["epoch"]) for row in mode_rows],
+            [float(row["test_acc"]) for row in mode_rows],
             label=MODE_LABELS[mode],
             color=MODE_COLORS[mode],
             linewidth=2.2,
