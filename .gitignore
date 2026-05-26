@@ -1,6 +1,8 @@
 .vscode/
 
+# python
 **/__pycache__/
+.venv/
 
 model/
 figure/
