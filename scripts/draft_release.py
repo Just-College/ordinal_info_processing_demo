@@ -3,10 +3,10 @@ from __future__ import annotations
 import fnmatch
 import hashlib
 import os
+import sys
 import time
 import zipfile
 from pathlib import Path
-
 
 REPO_ROOT = Path(__file__).resolve().parents[1]
 
@@ -15,8 +15,11 @@ OUTPUT_DIR = REPO_ROOT / "release"
 
 VERSION = "v2.7"
 
+# fmt: off
 INCLUDE_DIRS = [
     "README.md",
+    "paper.pdf",
+    "requirements.txt",
     "resources",
     "model",
     "src",
@@ -38,6 +41,18 @@ EXCLUDE_PATTERNS = {
     "*.tmp",
     "*~",
 }
+# fmt: on
+
+
+def format_size(num_bytes: int) -> str:
+    units = ["B", "KB", "MB", "GB"]
+    size = float(num_bytes)
+    for unit in units:
+        if size < 1024 or unit == units[-1]:
+            if unit == "B":
+                return f"{int(size)} {unit}"
+            return f"{size:.1f} {unit}"
+        size /= 1024
 
 
 def should_exclude(path: Path) -> bool:
@@ -97,7 +112,62 @@ def build_manifest(files: list[Path], zip_name: str) -> str:
     return "\n".join(lines) + "\n"
 
 
+def print_release_tree(files: list[Path]) -> None:
+    tree: dict[str, dict] = {}
+    file_sizes: dict[str, int] = {}
+
+    for path in files:
+        rel_parts = path.relative_to(REPO_ROOT).parts
+        node = tree
+        for part in rel_parts[:-1]:
+            node = node.setdefault(part, {})
+        rel_key = "/".join(rel_parts)
+        node[rel_parts[-1]] = None
+        file_sizes[rel_key] = path.stat().st_size
+
+    def subtree_stats(node: dict, rel_prefix: tuple[str, ...]) -> tuple[int, int]:
+        file_count = 0
+        total_size = 0
+        for name, child in node.items():
+            if child is None:
+                rel_key = "/".join((*rel_prefix, name))
+                file_count += 1
+                total_size += file_sizes[rel_key]
+            else:
+                child_count, child_size = subtree_stats(child, (*rel_prefix, name))
+                file_count += child_count
+                total_size += child_size
+        return file_count, total_size
+
+    def walk(node: dict, prefix: str, rel_prefix: tuple[str, ...]) -> None:
+        entries = sorted(
+            node.items(), key=lambda item: (item[1] is None, item[0].lower())
+        )
+        for index, (name, child) in enumerate(entries):
+            is_last = index == len(entries) - 1
+            connector = "└── " if is_last else "├── "
+            next_prefix = "    " if is_last else "│   "
+            if child is None:
+                rel_key = "/".join((*rel_prefix, name))
+                print(f"{prefix}{connector}{name} ({format_size(file_sizes[rel_key])})")
+            else:
+                child_count, child_size = subtree_stats(child, (*rel_prefix, name))
+                print(
+                    f"{prefix}{connector}{name}/ "
+                    f"({child_count} files, {format_size(child_size)})"
+                )
+                walk(child, prefix + next_prefix, (*rel_prefix, name))
+
+    total_size = sum(path.stat().st_size for path in files)
+    print("\nRelease contents:")
+    print(f". ({len(files)} files, {format_size(total_size)})")
+    walk(tree, "", ())
+
+
 def main() -> None:
+    if hasattr(sys.stdout, "reconfigure"):
+        sys.stdout.reconfigure(encoding="utf-8")
+
     OUTPUT_DIR.mkdir(parents=True, exist_ok=True)
 
     zip_path = OUTPUT_DIR / f"{RELEASE_NAME}_{VERSION}.zip"
@@ -112,6 +182,7 @@ def main() -> None:
 
     print(f"Created draft release: {zip_path}")
     print(f"Included files: {len(files)}")
+    print_release_tree(files)
 
 
 if __name__ == "__main__":
